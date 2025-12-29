@@ -55,6 +55,8 @@ function handleDisconnect(socket) {
     }
 }
 
-server.listen(3000, () => {
-    console.log('chatMESS server running on http://localhost:3000');
+const PORT = process.env.PORT || 3000; // Use Render's port, or 3000 if local
+server.listen(PORT, () => {
+    console.log(`chatMESS server running on port ${PORT}`);
+
 });
