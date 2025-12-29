@@ -1,70 +1,73 @@
+const socket = io();
+
 const chatWindow = document.getElementById('chat-window');
 const msgInput = document.getElementById('msg-input');
 const sendBtn = document.getElementById('send-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
 
 let isConnected = false;
-let isStrangerTyping = false;
 
-// Random replies to simulate a stranger
-const strangerReplies = [
-    "hey", "asl?", "im from mars", "vibecoding?", 
-    "cool website lol", "what is this?", "hello from the other side",
-    "java is cool but have you tried python?", "brb cat on keyboard",
-    "why is it called chatMESS?"
-];
-
-// Start the app automatically
+// START: Connect immediately
 window.onload = () => {
     findStranger();
 };
 
 function findStranger() {
-    addSystemMessage("Looking for someone you can vibe with...");
+    chatWindow.innerHTML = '';
+    addSystemMessage("Connecting to server...");
+    socket.emit('find_stranger');
+    
     disconnectBtn.innerText = "Stop";
     disconnectBtn.classList.remove('new');
-    
-    // Simulate connection delay
-    setTimeout(() => {
-        isConnected = true;
-        addSystemMessage("Stranger found! Say hi!");
-        enableInput(true);
-    }, 1500);
+    enableInput(false);
 }
 
-function disconnect() {
-    if (isConnected) {
-        isConnected = false;
-        addSystemMessage("Stranger has disconnected.");
-        disconnectBtn.innerText = "New";
-        disconnectBtn.classList.add('new');
-        enableInput(false);
-    } else {
-        // Start new chat
-        chatWindow.innerHTML = ''; // Clear chat
-        findStranger();
-    }
-}
+// LISTEN: What does the server say?
+socket.on('waiting_for_stranger', () => {
+    addSystemMessage("Looking for someone you can vibe with... (Waiting)");
+});
 
+socket.on('stranger_found', () => {
+    isConnected = true;
+    addSystemMessage("Stranger found! Say hi!");
+    enableInput(true);
+});
+
+socket.on('receive_message', (msg) => {
+    addMessage("Stranger: " + msg, 'stranger');
+});
+
+socket.on('stranger_disconnected', () => {
+    isConnected = false;
+    addSystemMessage("Stranger has disconnected.");
+    endChatUI();
+});
+
+// ACTION: Send message to server
 function sendMessage() {
     const text = msgInput.value.trim();
     if (text && isConnected) {
         addMessage("You: " + text, 'you');
+        socket.emit('send_message', text);
         msgInput.value = '';
-        
-        // Simulate stranger reply
-        if (!isStrangerTyping) {
-            isStrangerTyping = true;
-            const delay = Math.floor(Math.random() * 2000) + 1000; // 1-3 sec delay
-            setTimeout(() => {
-                if(isConnected) { // Check if still connected
-                    const randomReply = strangerReplies[Math.floor(Math.random() * strangerReplies.length)];
-                    addMessage("Stranger: " + randomReply, 'stranger');
-                    isStrangerTyping = false;
-                }
-            }, delay);
-        }
     }
+}
+
+function disconnect() {
+    if (isConnected || disconnectBtn.innerText === "Stop") {
+        socket.emit('disconnect_request');
+        isConnected = false;
+        addSystemMessage("You disconnected.");
+        endChatUI();
+    } else {
+        findStranger();
+    }
+}
+
+function endChatUI() {
+    disconnectBtn.innerText = "New";
+    disconnectBtn.classList.add('new');
+    enableInput(false);
 }
 
 // UI Helpers
@@ -73,7 +76,7 @@ function addMessage(text, className) {
     div.classList.add('message', className);
     div.innerText = text;
     chatWindow.appendChild(div);
-    scrollToBottom();
+    chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
 function addSystemMessage(text) {
@@ -81,10 +84,6 @@ function addSystemMessage(text) {
     div.classList.add('system-message');
     div.innerText = text;
     chatWindow.appendChild(div);
-    scrollToBottom();
-}
-
-function scrollToBottom() {
     chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
@@ -96,14 +95,6 @@ function enableInput(status) {
 
 // Event Listeners
 sendBtn.addEventListener('click', sendMessage);
-
-msgInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendMessage();
-});
-
+msgInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 disconnectBtn.addEventListener('click', disconnect);
-
-// Allow ESC key to disconnect/new chat
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') disconnect();
-});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') disconnect(); });
